@@ -1,70 +1,66 @@
 buildscript {
     ext {
-        repoConfig = {
-            mavenCentral()
-
-            maven {
-                url "https://plugins.gradle.org/m2/"
-            }
-        }
-
         jooqVersion = "3.11.5"
         junitVersion = "5.3.1"
     }
-
-    repositories repoConfig
 }
 
 plugins {
-    id "java"
-    id "jacoco"
-    id "org.unbroken-dome.xjc" version "1.3.0"
-    id "pl.allegro.tech.build.axion-release" version "1.9.3"
-    id "com.bmuschko.nexus" version "2.3.1"
-    id "io.codearte.nexus-staging" version "0.12.0"
+    id 'java'
+    id 'jacoco'
+    id 'maven-publish'
+    id 'signing'
+    id 'org.unbroken-dome.xjc' version '2.0.0'
+    id 'pl.allegro.tech.build.axion-release' version '1.15.0'
 }
 
-repositories repoConfig
+group = "com.github.piorkowskiprzemyslaw"
+version = scmVersion.version
+
+repositories {
+    mavenCentral()
+
+    maven {
+        url "https://plugins.gradle.org/m2/"
+    }
+}
 
 scmVersion {
     hooks {
-        pre 'fileUpdate', [file: 'README.md', pattern: {v, c -> /verjo:$v/}, replacement: {v, c -> "verjo:$v"}]
+        pre 'fileUpdate', [file: 'README.md', pattern: { v, c -> /verjo:$v/ }, replacement: { v, c -> "verjo:$v" }]
         pre 'commit'
     }
 }
 
-group "com.github.piorkowskiprzemyslaw"
-version scmVersion.version
-sourceCompatibility = 1.8
-targetCompatibility = 1.8
+sourceCompatibility = 11
+targetCompatibility = 11
 
 dependencies {
-    compile "org.jooq:jooq-codegen:$jooqVersion"
-    compile "org.jvnet.jaxb2_commons:jaxb2-basics-runtime:1.11.1"
+    implementation "org.jooq:jooq-codegen:$jooqVersion"
+    implementation "org.jvnet.jaxb2_commons:jaxb2-basics-runtime:1.11.1"
 
-    compileOnly 'org.projectlombok:lombok:1.18.2'
+    compileOnly 'org.projectlombok:lombok:1.18.26'
+    annotationProcessor 'org.projectlombok:lombok:1.18.26'
 
     xjcClasspath "org.jvnet.jaxb2_commons:jaxb2-basics:1.11.1"
     xjcClasspath "org.jvnet.jaxb2_commons:jaxb2-basics-annotate:1.0.4"
     xjcClasspath "org.jvnet.jaxb2_commons:jaxb2-fluent-api:3.0"
     xjcClasspath "org.jvnet.jaxb2_commons:jaxb2-commons-lang:2.4"
 
-    testCompile "com.google.jimfs:jimfs:1.1"
-    testCompile "org.assertj:assertj-core:3.11.1"
-    testCompile "javax.xml.bind:jaxb-api:2.3.0"
-    testCompile "com.sun.xml.bind:jaxb-core:2.3.0"
-    testCompile "com.sun.xml.bind:jaxb-impl:2.3.0"
-    testCompile "javax.activation:activation:1.1.1"
-    testCompile "org.junit.jupiter:junit-jupiter-api:$junitVersion"
-    testCompile "org.junit.jupiter:junit-jupiter-params:$junitVersion"
-    testRuntime "org.junit.jupiter:junit-jupiter-engine:$junitVersion"
+    testImplementation "com.google.jimfs:jimfs:1.2"
+    testImplementation "org.assertj:assertj-core:3.11.1"
+    testImplementation "javax.xml.bind:jaxb-api:2.3.0"
+    testImplementation "com.sun.xml.bind:jaxb-core:2.3.0"
+    testImplementation "com.sun.xml.bind:jaxb-impl:2.3.0"
+    testImplementation "javax.activation:activation:1.1.1"
+    testImplementation "org.junit.jupiter:junit-jupiter-api:$junitVersion"
+    testImplementation "org.junit.jupiter:junit-jupiter-params:$junitVersion"
+    testRuntimeOnly "org.junit.jupiter:junit-jupiter-engine:$junitVersion"
 }
 
 test {
     useJUnitPlatform()
-
     finalizedBy jacocoTestReport
-
     systemProperty "com.sun.xml.bind.v2.bytecode.ClassTailor.noOptimize", true
 }
 
@@ -74,75 +70,90 @@ jacoco {
 
 jacocoTestReport {
     reports {
-        xml {
-            enabled true
-        }
-        html {
-            enabled false
+        xml.required = true
+        html.required = false
+    }
+
+    dependsOn test
+}
+
+wrapper {
+    gradleVersion = "8.0.2"
+    distributionType = Wrapper.DistributionType.ALL
+}
+
+xjc {
+    sourceSets {
+        main {
+            xjcSchema.srcDir("src/main/resources/schema/2_3")
+            xjcBinding.srcDir("src/main/resources/schema/2_3/bindings")
+            xjcExtraArgs.addAll '-Xfluent-api', '-XtoString', '-Xequals', '-XhashCode', '-Xannotate'
         }
     }
 }
 
-wrapper {
-    gradleVersion = "4.10.2"
-    distributionType = Wrapper.DistributionType.ALL
-}
-
 xjcGenerate {
-    source = fileTree('src/main/resources/schema/2_3') { include 'schema.xsd' }
-    bindingFiles = fileTree('src/main/resources/schema/2_3/bindings') { include 'binding.xjb' }
     outputDirectory = file("gen/java")
     targetPackage = "com.github.piorkowskiprzemyslaw.verjo.xsd"
-    extraArgs = ['-Xannotate',
-                 '-Xfluent-api',
-                 '-XtoString',
-                 '-Xequals',
-                 '-XhashCode']
 }
 
 clean {
     delete "gen"
 }
 
-modifyPom {
-    project {
-        name 'VerJo'
-        description 'VerJo is an jOOQ plugin providing code generation from Vertabelo XML files.'
-        url 'https://github.com/piorkowskiprzemyslaw/verjo'
-        inceptionYear '2018'
+java {
+    withJavadocJar()
+    withSourcesJar()
+}
 
-        scm {
-            url 'https://github.com/piorkowskiprzemyslaw/verjo'
-            connection 'scm:https://github.com/piorkowskiprzemyslaw/verjo.git'
-            developerConnection 'scm:git@github.com:piorkowskiprzemyslaw/verjo.git'
-        }
+tasks.register('testJar', Jar) {
+    from sourceSets.test.output
+    archiveClassifier = 'tests'
+}
 
-        licenses {
-            license {
-                name 'MIT License'
-                url 'https://raw.githubusercontent.com/piorkowskiprzemyslaw/verjo/master/LICENSE'
-                distribution 'repo'
+publishing {
+    publications {
+        verjo(MavenPublication) {
+            pom {
+                name = 'VerJo'
+                description = 'VerJo is an jOOQ plugin providing code generation from Vertabelo XML files.'
+                url = 'https://github.com/piorkowskiprzemyslaw/verjo'
+                inceptionYear = '2018'
+
+                scm {
+                    url = 'https://github.com/piorkowskiprzemyslaw/verjo'
+                    connection = 'scm:https://github.com/piorkowskiprzemyslaw/verjo.git'
+                    developerConnection = 'scm:git@github.com:piorkowskiprzemyslaw/verjo.git'
+                }
+
+                licenses {
+                    license {
+                        name = 'MIT License'
+                        url = 'https://raw.githubusercontent.com/piorkowskiprzemyslaw/verjo/master/LICENSE'
+                        distribution = 'repo'
+                    }
+                }
+
+                developers {
+                    developer {
+                        id = 'piorkowskiprzemyslaw'
+                        name = 'Przemysław Piórkowski'
+                        email = 'piorkowskiprzemyslaw@gmail.com'
+                    }
+                }
             }
-        }
 
-        developers {
-            developer {
-                id 'piorkowskiprzemyslaw'
-                name 'Przemysław Piórkowski'
-                email 'piorkowskiprzemyslaw@gmail.com'
-            }
+            artifact testJar
+            from components.java
         }
     }
-}
 
-extraArchive {
-    sources = true
-    tests = true
-    javadoc = true
-}
-
-nexus {
-    sign = true
-    repositoryUrl = 'https://oss.sonatype.org/service/local/staging/deploy/maven2'
-    snapshotRepositoryUrl = 'https://oss.sonatype.org/content/repositories/snapshots'
+    repositories {
+        maven {
+            def repositoryUrl = 'https://oss.sonatype.org/service/local/staging/deploy/maven2'
+            def snapshotRepositoryUrl = 'https://oss.sonatype.org/content/repositories/snapshots'
+            url = version.endsWith('SNAPSHOT') ? snapshotRepositoryUrl : repositoryUrl
+            name = "Verjo"
+        }
+    }
 }
